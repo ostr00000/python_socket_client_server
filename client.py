@@ -95,7 +95,7 @@ class Client:
 
             elif order == MessageType.compute:
                 server_args = receive(self.sock)
-                function_args, server_id = list(zip(*server_args))
+                server_id, function_args = list(zip(*server_args))
 
                 module_name, function_name = receive(self.sock)
                 logger.debug("received module: '{}', function: '{}'"
