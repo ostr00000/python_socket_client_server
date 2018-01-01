@@ -1,5 +1,5 @@
 import typing
-import multiprocess
+from example import multiprocess
 
 arg_num = 7
 

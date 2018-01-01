@@ -7,13 +7,12 @@ import argparse
 import multiprocessing
 import logging
 
-directory = "./downloaded/"
+DIRECTORY = "./downloaded/"
 THREADS = 8
 DECLARED_WORK = 44
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
-sys.path.append(os.path.dirname(os.path.abspath(__file__)) + directory[1:])
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG)
@@ -36,29 +35,41 @@ _ret = {f_name}
 
 
 class Client:
-    def __init__(self, host, port):
+    def __init__(self, host, port, directory=DIRECTORY):
+        """
+        :param host: '127.0.0.1'
+        :param port: 55555
+        :param directory: './downloaded/'
+        """
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((host, port))
         self.map_function = None
-        self.my_dir = os.path.dirname(os.path.abspath(__file__))
+
+        self.directory = directory
+        cur_path = os.path.dirname(os.path.abspath(__file__))
+        sys.path.append(cur_path + directory[1:])
 
     def _download_file(self):
-        if os.path.exists(directory):
-            shutil.rmtree(directory[:-1])
-        os.makedirs(directory)
+        if os.path.exists(self.directory):
+            shutil.rmtree(self.directory[:-1])
+        os.makedirs(self.directory)
+
+        dir_num = receive(self.sock)
+        for i in range(dir_num):
+            dir_name = receive(self.sock)
+            os.makedirs(self.directory + dir_name)
 
         files_num = receive(self.sock)
-
         for i in range(files_num):
             filename = receive(self.sock)
             data = receive(self.sock)
-            with open(directory + filename, 'w') \
+            with open(self.directory + filename, 'w') \
                     as new_file:  # type: Optional[IO[str]]
                 print(data, file=new_file, end='')
 
     def start_client(self):
         response = receive(self.sock)
-        logger.debug("needed modules {}".format(response))
+        logger.debug("needed dir and files {}".format(response))
 
         if not self._has_all_files(response):
             send(MessageType.download, self.sock)
@@ -71,7 +82,11 @@ class Client:
 
         while True:
             logger.debug("waiting for orders")
-            order = receive(self.sock)
+            try:
+                order = receive(self.sock)
+            except socket.timeout:
+                logger.debug("no task from server ")
+                continue
 
             if order == MessageType.end:
                 logger.debug("message from server: end")
@@ -87,10 +102,6 @@ class Client:
                              .format(module_name, function_name))
                 self._prepare_function(module_name, function_name)
 
-                # send("fuck you", self.sock)
-                # logger.debug("revolt!")
-                # continue
-
                 function_result = self.map_function[2](function_args)
 
                 client_result = list(zip(server_id, function_result))
@@ -100,11 +111,14 @@ class Client:
                 logger.warning("unexpected message from server")
                 break
 
-    @staticmethod
-    def _has_all_files(files: List[Tuple[str, int]]):
+    def _has_all_files(self, files: Tuple[List[str], List[Tuple[str, int]]]):
+        for name in files[0]:
+            name = self.directory + name
+            if not os.path.exists(name):
+                return False
 
-        for name, size in files:
-            name = directory + name
+        for name, size in files[1]:
+            name = self.directory + name
             if not os.path.exists(name):
                 # logger.debug("file doesn't exist '{}'".format(name))
                 return False
@@ -122,7 +136,7 @@ class Client:
 
             to_compile = template.format(m_name=module_name,
                                          f_name=function_name,
-                                         dir=directory[2:-1])
+                                         dir=self.directory[2:-1])
 
             comp = compile(to_compile, '<string>', 'exec')
             loc = {}

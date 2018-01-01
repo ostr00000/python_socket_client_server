@@ -16,24 +16,33 @@ logger.setLevel(logging.DEBUG)
 
 
 class Server:
-    def __init__(self, host, port, required_files: List):
+    def __init__(self, host, port,
+                 required_dir: List[str],
+                 required_files: List[str]):
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((host, port))
         self.sock.listen()
         self.sock.settimeout(SLEEP_TIME)
+
+        logger.info("Server started on {}:{}".format(host, port))
 
         self.lock = threading.Lock()
         self.workers = {}
         self.loop_thread = threading.Thread(target=self._server_loop)
         self.end_flag = threading.Event()
 
-        self.required_modules = list(map(
+        self.required_dir = required_dir
+        self.required_files = list(map(
             lambda name: (name, os.stat(name).st_size), required_files
         ))
 
     def _send_files(self, client):
-        send(len(self.required_modules), client)
-        for filename, _size in self.required_modules:
+        send(len(self.required_dir), client)
+        for dir_name in self.required_dir:
+            send(dir_name, client)
+
+        send(len(self.required_files), client)
+        for filename, _size in self.required_files:
             with open(filename, 'r') as file:
                 data = file.read()
                 send(filename, client)
@@ -56,9 +65,9 @@ class Server:
                 continue
 
             try:
-                send(self.required_modules, connection)
-                logger.debug("sent required modules: {}"
-                             .format(self.required_modules))
+                send((self.required_dir, self.required_files), connection)
+                logger.debug("sent required dir: {} and files: {}"
+                             .format(self.required_dir, self.required_files))
 
                 response = receive(connection)
                 if response == MessageType.download:
