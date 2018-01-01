@@ -1,7 +1,7 @@
 import itertools
 
 from connection import *
-from typing import List, Dict
+from typing import List
 import threading
 import os
 import select
@@ -23,7 +23,7 @@ class Server:
         self.sock.settimeout(SLEEP_TIME)
 
         self.lock = threading.Lock()
-        self.workers: Dict[socket.socket, List] = {}
+        self.workers = {}
         self.loop_thread = threading.Thread(target=self._server_loop)
         self.end_flag = threading.Event()
 
@@ -91,7 +91,6 @@ class Server:
         copy = []
         socket_sent = []
         ret = []
-        num = 0
 
         while data_to_send:
             if not copy:
@@ -119,11 +118,6 @@ class Server:
                                                  socket_sent, SLEEP_TIME)
 
             with self.lock:
-                # for error in errors:
-                # logger.debug("there was a problem {}".format(str(error)))
-                # socket_sent.remove(error)
-                # self.workers[error][2] = False
-
                 for readable in itertools.chain(read, errors):
                     logger.debug("received msg from {}"
                                  .format(readable.getpeername()))
@@ -146,8 +140,8 @@ class Server:
                                     if i not in returned_i]
                     ret.append(returned_data)
 
-                    # logger.info("received computed data num: {}".format(num))
-                    num += 1
+                    logger.info("received computed data num: {}"
+                                .format(len(returned_data)))
 
         return ret
 
